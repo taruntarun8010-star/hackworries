@@ -558,26 +558,94 @@
     }
 
     let currentLoginEmail = '';
+    let isOtpRequestInFlight = false;
+    let resendCooldownRemaining = 0;
+    let resendCooldownInterval = null;
+
+    function setSendOtpButtonLoading(isLoading) {
+        const button = document.getElementById('sendOtpBtn');
+        if (!button) return;
+        button.disabled = isLoading;
+        button.textContent = isLoading ? 'Sending...' : 'Send OTP';
+    }
+
+    function setResendOtpState(disabled, text) {
+        const resendLink = document.getElementById('resendOtpBtn');
+        if (!resendLink) return;
+        resendLink.textContent = text;
+        resendLink.classList.toggle('link-disabled', disabled);
+        resendLink.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    }
+
+    function clearResendCooldown() {
+        if (resendCooldownInterval) {
+            clearInterval(resendCooldownInterval);
+            resendCooldownInterval = null;
+        }
+        resendCooldownRemaining = 0;
+        setResendOtpState(false, "Didn't receive? Resend");
+    }
+
+    function startResendCooldown(seconds = 30) {
+        clearResendCooldown();
+        resendCooldownRemaining = seconds;
+        setResendOtpState(true, `Resend in ${resendCooldownRemaining}s`);
+
+        resendCooldownInterval = setInterval(() => {
+            resendCooldownRemaining -= 1;
+            if (resendCooldownRemaining <= 0) {
+                clearResendCooldown();
+                return;
+            }
+            setResendOtpState(true, `Resend in ${resendCooldownRemaining}s`);
+        }, 1000);
+    }
+
+    function getOtpErrorMessage(result, defaultMessage) {
+        if (result?.status === 429) {
+            return 'Please wait 30 seconds before requesting another OTP.';
+        }
+        if (result?.data?.message) {
+            return result.data.message;
+        }
+        return defaultMessage;
+    }
 
     async function sendOtp() {
+        if (isOtpRequestInFlight) {
+            return;
+        }
+
         const email = document.getElementById('loginEmailInput').value.trim().toLowerCase();
         if (!isValidEmail(email)) {
             showToast('Please enter a valid email address');
             return;
         }
 
-        const result = await postJson(API_ENDPOINTS.SEND_OTP, { email });
-        if (!result.ok) {
-            showToast(result.data?.message || 'Failed to send OTP');
-            return;
-        }
+        isOtpRequestInFlight = true;
+        setSendOtpButtonLoading(true);
 
-        currentLoginEmail = email;
-        document.getElementById('otpEmailDisplay').innerText = email;
-        resetOtpInputs();
-        showScreen('otpScreen');
-        setupOtpInputs();
-        showToast(result.data?.message || 'OTP was sent to your email');
+        try {
+            const result = await postJson(API_ENDPOINTS.SEND_OTP, { email });
+            if (!result.ok) {
+                if (result.status === 429) {
+                    startResendCooldown(30);
+                }
+                showToast(getOtpErrorMessage(result, 'Failed to send OTP. Please try again.'));
+                return;
+            }
+
+            currentLoginEmail = email;
+            document.getElementById('otpEmailDisplay').innerText = email;
+            resetOtpInputs();
+            showScreen('otpScreen');
+            setupOtpInputs();
+            startResendCooldown(30);
+            showToast(result.data?.message || 'OTP was sent to your email');
+        } finally {
+            isOtpRequestInFlight = false;
+            setSendOtpButtonLoading(false);
+        }
     }
 
     async function verifyOtp() {
@@ -613,8 +681,40 @@
             showScreen('loginScreen');
             return;
         }
-        const result = await postJson(API_ENDPOINTS.SEND_OTP, { email: currentLoginEmail });
-        showToast(result.data?.message || (result.ok ? 'OTP resent successfully' : 'Failed to resend OTP'));
+
+        if (isOtpRequestInFlight) {
+            return;
+        }
+
+        if (resendCooldownRemaining > 0) {
+            showToast(`Please wait ${resendCooldownRemaining}s before resending OTP.`);
+            return;
+        }
+
+        isOtpRequestInFlight = true;
+        setResendOtpState(true, 'Sending...');
+
+        try {
+            const result = await postJson(API_ENDPOINTS.SEND_OTP, { email: currentLoginEmail });
+
+            if (!result.ok) {
+                if (result.status === 429) {
+                    startResendCooldown(30);
+                } else {
+                    setResendOtpState(false, "Didn't receive? Resend");
+                }
+                showToast(getOtpErrorMessage(result, 'Failed to resend OTP. Please try again.'));
+                return;
+            }
+
+            startResendCooldown(30);
+            showToast(result.data?.message || 'OTP resent successfully');
+        } finally {
+            isOtpRequestInFlight = false;
+            if (resendCooldownRemaining <= 0) {
+                setResendOtpState(false, "Didn't receive? Resend");
+            }
+        }
     }
 
     function submitSignup() {
@@ -751,6 +851,7 @@
         document.getElementById('verifyOtpBtn').addEventListener('click', verifyOtp);
         document.getElementById('submitSignupBtn').addEventListener('click', submitSignup);
         document.getElementById('goToLoginFromSignupBtn').addEventListener('click', () => showScreen('loginScreen'));
+        clearResendCooldown();
 
         // Profile choice
         document.querySelectorAll('.choice-card').forEach(card => {
