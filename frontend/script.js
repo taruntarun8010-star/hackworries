@@ -525,6 +525,7 @@
 
     // ---------- AUTH FLOW ----------
     const API_ENDPOINTS = {
+        REGISTER: '/api/auth/register',
         SEND_OTP: '/api/auth/send-otp',
         VERIFY_OTP: '/api/auth/verify-otp'
     };
@@ -611,6 +612,41 @@
         return defaultMessage;
     }
 
+    function normalizeProfileType(profileType) {
+        const normalized = String(profileType || '').trim().toLowerCase();
+        if (normalized === 'vendor' || normalized === 'company') {
+            return normalized;
+        }
+        return null;
+    }
+
+    function openDashboardByProfile(profileType, showGreeting = false) {
+        const normalized = normalizeProfileType(profileType);
+        if (normalized === 'vendor') {
+            showScreen('vendorDashboard');
+            switchVendorTab('profile');
+            updateVendorNotificationBadge();
+            if (showGreeting) {
+                addMessage("Welcome, Vendor! Check the 'Market Trends' in your dashboard soon.", 'bot');
+            }
+            return;
+        }
+
+        if (normalized === 'company') {
+            showScreen('companyDashboard');
+            renderCategoryChips('all');
+            renderCompanyItems();
+            updateCartBadge();
+            updateCompanyNotificationBadge();
+            if (showGreeting) {
+                addMessage("Hello! I can help you find the best deals in 'Woods' and 'Paint'.", 'bot');
+            }
+            return;
+        }
+
+        showScreen('profileChoiceScreen');
+    }
+
     async function sendOtp() {
         if (isOtpRequestInFlight) {
             return;
@@ -670,9 +706,16 @@
         }
 
         showToast(result.data?.message || 'OTP verified successfully!');
-        currentUser = { email: currentLoginEmail, name: 'Demo User', profileType: null };
+        const verifiedUser = result.data?.user || {};
+        currentUser = {
+            id: verifiedUser.id || null,
+            name: verifiedUser.name || 'Demo User',
+            email: verifiedUser.email || currentLoginEmail,
+            mobile: verifiedUser.mobile || '',
+            profileType: normalizeProfileType(verifiedUser.profileType)
+        };
         saveUser();
-        showScreen('profileChoiceScreen');
+        openDashboardByProfile(currentUser.profileType, true);
     }
 
     async function resendOtp() {
@@ -717,15 +760,42 @@
         }
     }
 
-    function submitSignup() {
+    async function submitSignup() {
         const name = document.getElementById('signupName').value.trim();
-        const email = document.getElementById('signupEmail').value.trim();
+        const email = document.getElementById('signupEmail').value.trim().toLowerCase();
         const mobile = document.getElementById('signupMobile').value.trim();
-        if (!name || !email || !/^\d{10}$/.test(mobile)) {
-            showToast('Please fill all fields correctly');
+        const profileType = normalizeProfileType(document.getElementById('signupRole').value);
+        const businessName = document.getElementById('signupBusinessName').value.trim();
+        const location = document.getElementById('signupLocation').value.trim();
+
+        if (!name || !isValidEmail(email) || !/^\d{10}$/.test(mobile.replace(/\D/g, '')) || !profileType || !businessName || !location) {
+            showToast('Please fill all registration details correctly');
             return;
         }
-        showToast('Signup successful! Please login');
+
+        const result = await postJson(API_ENDPOINTS.REGISTER, {
+            name,
+            email,
+            mobile,
+            profileType,
+            businessName,
+            location
+        });
+
+        if (!result.ok) {
+            showToast(result.data?.message || 'Signup failed. Please try again.');
+            return;
+        }
+
+        document.getElementById('loginEmailInput').value = email;
+        currentLoginEmail = email;
+        document.getElementById('signupName').value = '';
+        document.getElementById('signupEmail').value = '';
+        document.getElementById('signupMobile').value = '';
+        document.getElementById('signupRole').value = '';
+        document.getElementById('signupBusinessName').value = '';
+        document.getElementById('signupLocation').value = '';
+        showToast(result.data?.message || 'Signup successful! Please login using the same email.');
         showScreen('loginScreen');
     }
 
@@ -734,21 +804,9 @@
             showScreen('loginScreen');
             return;
         }
-        currentUser.profileType = profileType;
+        currentUser.profileType = normalizeProfileType(profileType);
         saveUser();
-        if (profileType === 'vendor') {
-            showScreen('vendorDashboard');
-            switchVendorTab('profile');
-            updateVendorNotificationBadge();
-            addMessage("Welcome, Vendor! Check the 'Market Trends' in your dashboard soon.", "bot");
-        } else {
-            showScreen('companyDashboard');
-            renderCategoryChips('all');
-            renderCompanyItems();
-            updateCartBadge();
-            updateCompanyNotificationBadge();
-            addMessage("Hello! I can help you find the best deals in 'Woods' and 'Paint'.", "bot");
-        }
+        openDashboardByProfile(currentUser.profileType, true);
     }
 
     function logout() {
@@ -923,21 +981,8 @@
 
         // Restore session
         if (currentUser) {
-            if (currentUser.profileType) {
-                if (currentUser.profileType === 'vendor') {
-                    showScreen('vendorDashboard');
-                    switchVendorTab('profile');
-                    updateVendorNotificationBadge();
-                } else {
-                    showScreen('companyDashboard');
-                    renderCategoryChips('all');
-                    renderCompanyItems();
-                    updateCartBadge();
-                    updateCompanyNotificationBadge();
-                }
-            } else {
-                showScreen('profileChoiceScreen');
-            }
+            currentUser.profileType = normalizeProfileType(currentUser.profileType);
+            openDashboardByProfile(currentUser.profileType);
         } else {
             showScreen('loginScreen');
         }

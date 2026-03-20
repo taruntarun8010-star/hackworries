@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
@@ -11,11 +12,75 @@ const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const OTP_COOLDOWN_MS = 30 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
 const FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
+const REGISTRATION_FILE = path.join(__dirname, 'data', 'registrations.json');
 const ALLOW_CONSOLE_OTP =
     process.env.ALLOW_CONSOLE_OTP === 'true' ||
     (typeof process.env.ALLOW_CONSOLE_OTP === 'undefined' && process.env.NODE_ENV !== 'production');
 
 const otpStore = new Map();
+
+function ensureRegistrationFile() {
+    const directory = path.dirname(REGISTRATION_FILE);
+    if (!fs.existsSync(directory)) {
+        fs.mkdirSync(directory, { recursive: true });
+    }
+    if (!fs.existsSync(REGISTRATION_FILE)) {
+        fs.writeFileSync(REGISTRATION_FILE, JSON.stringify({ users: [] }, null, 2));
+    }
+}
+
+function readRegisteredUsers() {
+    ensureRegistrationFile();
+    try {
+        const fileContent = fs.readFileSync(REGISTRATION_FILE, 'utf8');
+        const parsed = JSON.parse(fileContent || '{}');
+        if (!Array.isArray(parsed.users)) {
+            return [];
+        }
+        return parsed.users;
+    } catch (error) {
+        console.error('Failed to read registrations file:', error);
+        return [];
+    }
+}
+
+function writeRegisteredUsers(users) {
+    ensureRegistrationFile();
+    fs.writeFileSync(REGISTRATION_FILE, JSON.stringify({ users }, null, 2));
+}
+
+function getRegisteredUserByEmail(email) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+        return null;
+    }
+    return readRegisteredUsers().find((user) => user.email === normalizedEmail) || null;
+}
+
+function sanitizeRegisteredUser(user) {
+    if (!user) {
+        return null;
+    }
+    return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobile: user.mobile,
+        profileType: user.profileType,
+        businessName: user.businessName,
+        location: user.location,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+    };
+}
+
+function normalizeMobile(mobile) {
+    return String(mobile || '').replace(/\D/g, '');
+}
+
+function isValidMobile(mobile) {
+    return /^\d{10}$/.test(normalizeMobile(mobile));
+}
 
 function generateOtp() {
     return String(Math.floor(100000 + Math.random() * 900000));
@@ -25,7 +90,7 @@ function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function createAndStoreOtp(email) {
+function createAndStoreOtp(email, registeredUser) {
     const otp = generateOtp();
     const expiresAt = Date.now() + OTP_EXPIRY_MS;
 
@@ -33,7 +98,8 @@ function createAndStoreOtp(email) {
         otp,
         expiresAt,
         attempts: 0,
-        lastSentAt: Date.now()
+        lastSentAt: Date.now(),
+        user: sanitizeRegisteredUser(registeredUser)
     });
 
     return otp;
@@ -61,6 +127,7 @@ function createTransporter() {
 }
 
 let transporter = createTransporter();
+ensureRegistrationFile();
 
 app.use(express.json());
 app.use(express.static(FRONTEND_DIR));
@@ -69,7 +136,64 @@ app.get('/api/health', (req, res) => {
     res.json({
         ok: true,
         smtpConfigured: Boolean(transporter),
-        consoleOtpFallback: ALLOW_CONSOLE_OTP
+        consoleOtpFallback: ALLOW_CONSOLE_OTP,
+        registeredUsers: readRegisteredUsers().length
+    });
+});
+
+app.post('/api/auth/register', (req, res) => {
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const mobile = normalizeMobile(req.body?.mobile || '');
+    const profileType = String(req.body?.profileType || '').trim().toLowerCase();
+    const businessName = String(req.body?.businessName || '').trim();
+    const location = String(req.body?.location || '').trim();
+
+    if (!name || !isValidEmail(email) || !isValidMobile(mobile)) {
+        return res.status(400).json({
+            message: 'Please provide valid name, email and mobile number.'
+        });
+    }
+
+    if (!['vendor', 'company'].includes(profileType)) {
+        return res.status(400).json({
+            message: 'Please select Vendor or Company during registration.'
+        });
+    }
+
+    if (!businessName || !location) {
+        return res.status(400).json({
+            message: 'Business name and location are required.'
+        });
+    }
+
+    const existingUser = getRegisteredUserByEmail(email);
+    if (existingUser) {
+        return res.status(409).json({
+            message: 'This email is already registered. Please login with OTP.'
+        });
+    }
+
+    const users = readRegisteredUsers();
+    const now = new Date().toISOString();
+    const user = {
+        id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        email,
+        mobile,
+        profileType,
+        businessName,
+        location,
+        createdAt: now,
+        updatedAt: now
+    };
+
+    users.push(user);
+    writeRegisteredUsers(users);
+
+    return res.status(201).json({
+        message: 'Registration successful. Login with the same email to receive OTP.',
+        user: sanitizeRegisteredUser(user)
     });
 });
 
@@ -80,6 +204,13 @@ app.post('/api/auth/send-otp', async (req, res) => {
         return res.status(400).json({ message: 'Valid email address required' });
     }
 
+    const registeredUser = getRegisteredUserByEmail(email);
+    if (!registeredUser) {
+        return res.status(403).json({
+            message: 'Email is not registered. Please create an account first.'
+        });
+    }
+
     const existingRecord = otpStore.get(email);
     if (existingRecord && Date.now() - existingRecord.lastSentAt < OTP_COOLDOWN_MS) {
         return res.status(429).json({
@@ -87,7 +218,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
         });
     }
 
-    const otp = createAndStoreOtp(email);
+    const otp = createAndStoreOtp(email, registeredUser);
 
     if (!transporter) {
         transporter = createTransporter();
@@ -170,8 +301,12 @@ app.post('/api/auth/verify-otp', (req, res) => {
         return res.status(400).json({ message: 'Incorrect OTP' });
     }
 
+    const verifiedUser = record.user || sanitizeRegisteredUser(getRegisteredUserByEmail(email));
     otpStore.delete(email);
-    return res.json({ message: 'OTP verified successfully' });
+    return res.json({
+        message: 'OTP verified successfully',
+        user: verifiedUser || { email }
+    });
 });
 
 app.get('/', (req, res) => {
