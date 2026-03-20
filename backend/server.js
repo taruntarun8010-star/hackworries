@@ -70,8 +70,69 @@ function sanitizeRegisteredUser(user) {
         businessName: user.businessName,
         location: user.location,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        updatedAt: user.updatedAt,
+        lastLoginAt: user.lastLoginAt || null,
+        loginCount: Number(user.loginCount || 0)
     };
+}
+
+function upsertRegisteredUser(payload) {
+    const users = readRegisteredUsers();
+    const now = new Date().toISOString();
+    const index = users.findIndex((user) => user.email === payload.email);
+
+    if (index >= 0) {
+        const existing = users[index];
+        const updated = {
+            ...existing,
+            ...payload,
+            id: existing.id,
+            createdAt: existing.createdAt,
+            updatedAt: now,
+            lastLoginAt: existing.lastLoginAt || null,
+            loginCount: Number(existing.loginCount || 0)
+        };
+        users[index] = updated;
+        writeRegisteredUsers(users);
+        return { user: updated, isNew: false };
+    }
+
+    const user = {
+        id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        ...payload,
+        createdAt: now,
+        updatedAt: now,
+        lastLoginAt: null,
+        loginCount: 0
+    };
+
+    users.push(user);
+    writeRegisteredUsers(users);
+    return { user, isNew: true };
+}
+
+function markUserLoginSuccess(email) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+        return null;
+    }
+
+    const users = readRegisteredUsers();
+    const index = users.findIndex((user) => user.email === normalizedEmail);
+    if (index < 0) {
+        return null;
+    }
+
+    const now = new Date().toISOString();
+    users[index] = {
+        ...users[index],
+        lastLoginAt: now,
+        loginCount: Number(users[index].loginCount || 0) + 1,
+        updatedAt: now
+    };
+
+    writeRegisteredUsers(users);
+    return users[index];
 }
 
 function normalizeMobile(mobile) {
@@ -167,32 +228,19 @@ app.post('/api/auth/register', (req, res) => {
         });
     }
 
-    const existingUser = getRegisteredUserByEmail(email);
-    if (existingUser) {
-        return res.status(409).json({
-            message: 'This email is already registered. Please login with OTP.'
-        });
-    }
-
-    const users = readRegisteredUsers();
-    const now = new Date().toISOString();
-    const user = {
-        id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    const { user, isNew } = upsertRegisteredUser({
         name,
         email,
         mobile,
         profileType,
         businessName,
-        location,
-        createdAt: now,
-        updatedAt: now
-    };
+        location
+    });
 
-    users.push(user);
-    writeRegisteredUsers(users);
-
-    return res.status(201).json({
-        message: 'Registration successful. Login with the same email to receive OTP.',
+    return res.status(isNew ? 201 : 200).json({
+        message: isNew
+            ? 'Registration successful. Login with the same email to receive OTP.'
+            : 'Email already registered. Your details were updated. Login with the same email to receive OTP.',
         user: sanitizeRegisteredUser(user)
     });
 });
@@ -302,10 +350,11 @@ app.post('/api/auth/verify-otp', (req, res) => {
     }
 
     const verifiedUser = record.user || sanitizeRegisteredUser(getRegisteredUserByEmail(email));
+    const loggedInUser = markUserLoginSuccess(email) || verifiedUser;
     otpStore.delete(email);
     return res.json({
         message: 'OTP verified successfully',
-        user: verifiedUser || { email }
+        user: sanitizeRegisteredUser(loggedInUser) || { email }
     });
 });
 
@@ -313,6 +362,21 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-});
+function startServer(port, hasRetried = false) {
+    const server = app.listen(port, () => {
+        console.log(`Server running at http://localhost:${port}`);
+    });
+
+    server.on('error', (error) => {
+        if (error.code === 'EADDRINUSE' && !hasRetried) {
+            const fallbackPort = port + 1;
+            console.warn(`Port ${port} is busy. Retrying on port ${fallbackPort}...`);
+            startServer(fallbackPort, true);
+            return;
+        }
+        console.error('Server failed to start:', error);
+        process.exit(1);
+    });
+}
+
+startServer(PORT);

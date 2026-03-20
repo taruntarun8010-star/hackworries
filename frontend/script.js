@@ -612,6 +612,19 @@
         return defaultMessage;
     }
 
+    function getSignupErrorMessage(result) {
+        if (result?.status === 404) {
+            return 'Signup service is unavailable. Please restart the server and try again.';
+        }
+        if (result?.status === 0) {
+            return 'Could not connect to server. Please run npm run dev and retry.';
+        }
+        if (result?.data?.message) {
+            return result.data.message;
+        }
+        return 'Signup failed. Please try again.';
+    }
+
     function normalizeProfileType(profileType) {
         const normalized = String(profileType || '').trim().toLowerCase();
         if (normalized === 'vendor' || normalized === 'company') {
@@ -764,11 +777,12 @@
         const name = document.getElementById('signupName').value.trim();
         const email = document.getElementById('signupEmail').value.trim().toLowerCase();
         const mobile = document.getElementById('signupMobile').value.trim();
-        const profileType = normalizeProfileType(document.getElementById('signupRole').value);
+        const normalizedMobile = mobile.replace(/\D/g, '');
+        const profileType = normalizeProfileType(document.getElementById('signupRole').value) || 'vendor';
         const businessName = document.getElementById('signupBusinessName').value.trim();
         const location = document.getElementById('signupLocation').value.trim();
 
-        if (!name || !isValidEmail(email) || !/^\d{10}$/.test(mobile.replace(/\D/g, '')) || !profileType || !businessName || !location) {
+        if (!name || !isValidEmail(email) || !/^\d{10}$/.test(normalizedMobile) || !profileType || !businessName || !location) {
             showToast('Please fill all registration details correctly');
             return;
         }
@@ -776,14 +790,14 @@
         const result = await postJson(API_ENDPOINTS.REGISTER, {
             name,
             email,
-            mobile,
+            mobile: normalizedMobile,
             profileType,
             businessName,
             location
         });
 
         if (!result.ok) {
-            showToast(result.data?.message || 'Signup failed. Please try again.');
+            showToast(getSignupErrorMessage(result));
             return;
         }
 
@@ -792,7 +806,7 @@
         document.getElementById('signupName').value = '';
         document.getElementById('signupEmail').value = '';
         document.getElementById('signupMobile').value = '';
-        document.getElementById('signupRole').value = '';
+        document.getElementById('signupRole').value = 'vendor';
         document.getElementById('signupBusinessName').value = '';
         document.getElementById('signupLocation').value = '';
         showToast(result.data?.message || 'Signup successful! Please login using the same email.');
