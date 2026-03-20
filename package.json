@@ -1,0 +1,16 @@
+{
+  "name": "hackworries-bazar-vendor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bazar Vendor app with SMTP-based email OTP login",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node backend/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "nodemailer": "^6.10.1"
+  }
+}

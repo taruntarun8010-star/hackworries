@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bazar Vendor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="light">
+    <!-- Toast container -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Chatbot (will be shown only on dashboards) -->
+    <button class="chat-button hidden" id="chatButton">💬</button>
+    <div class="chat-panel hidden" id="chatPanel">
+        <div class="chat-header">
+            <span>AI Assistant</span>
+            <button id="closeChatBtn">&times;</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">Hello! I'm your AI assistant. How can I help you today?</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="Ask me anything...">
+            <button id="sendChatBtn">Send</button>
+        </div>
+    </div>
+
+    <!-- LOGIN SCREEN -->
+    <div id="loginScreen" class="screen animate-in">
+        <div class="top-actions">
+            <button class="icon-btn" id="themeToggle"><i class="fas fa-moon"></i> Dark</button>
+        </div>
+        <div class="text-center">
+            <div class="logo"><i class="fas fa-store"></i> Bazar Vendor</div>
+            <h2>Welcome</h2>
+            <p class="login-subtitle">The premier B2B marketplace for building materials, tools & supplies</p>
+        </div>
+        <input type="email" id="loginEmailInput" class="input-field" placeholder="Enter your email address" value="aryan@example.com">
+        <button class="btn" id="sendOtpBtn">Send OTP</button>
+        <div class="text-center link-row">
+            <span class="link muted-link" id="showSignupBtn">New here? Create an account</span>
+        </div>
+    </div>
+
+    <!-- OTP SCREEN -->
+    <div id="otpScreen" class="screen hidden animate-in">
+        <div class="top-actions">
+            <button class="icon-btn" id="themeToggleOtp"><i class="fas fa-moon"></i> Dark</button>
+        </div>
+        <div class="text-center">
+            <div class="logo"><i class="fas fa-store"></i> Bazar Vendor</div>
+            <h2>Verify Your Email</h2>
+            <p class="otp-subtitle">We've sent a 6-digit code to <span id="otpEmailDisplay">aryan@example.com</span></p>
+        </div>
+        <div class="otp-container" id="otpContainer">
+            <input type="text" class="otp-input" maxlength="1" data-index="0">
+            <input type="text" class="otp-input" maxlength="1" data-index="1">
+            <input type="text" class="otp-input" maxlength="1" data-index="2">
+            <input type="text" class="otp-input" maxlength="1" data-index="3">
+            <input type="text" class="otp-input" maxlength="1" data-index="4">
+            <input type="text" class="otp-input" maxlength="1" data-index="5">
+        </div>
+        <button class="btn" id="verifyOtpBtn">Verify & Continue</button>
+        <div class="text-center link-row">
+            <span class="link muted-link" id="resendOtpBtn">Didn't receive? Resend</span> <span class="muted-separator">•</span>
+            <span class="link muted-link" id="backToLoginBtn">Edit email</span>
+        </div>
+    </div>
+
+    <!-- SIGNUP SCREEN -->
+    <div id="signupScreen" class="screen hidden animate-in">
+        <div class="top-actions">
+            <button class="icon-btn" id="themeToggleSignup"><i class="fas fa-moon"></i> Dark</button>
+        </div>
+        <div class="text-center">
+            <div class="logo"><i class="fas fa-store"></i> Bazar Vendor</div>
+            <h2>Create Your Account</h2>
+            <p class="signup-subtitle">Join our growing community of B2B merchants</p>
+        </div>
+        <input type="text" id="signupName" class="input-field" placeholder="Full name" value="Aryan Saini">
+        <input type="email" id="signupEmail" class="input-field" placeholder="Business email" value="aryan@example.com">
+        <input type="tel" id="signupMobile" class="input-field" placeholder="Mobile number" value="9876543210">
+        <button class="btn" id="submitSignupBtn">Create Account</button>
+        <div class="text-center link-row">
+            <span class="link muted-link" id="goToLoginFromSignupBtn">Already a member? Sign in</span>
+        </div>
+    </div>
+
+    <!-- PROFILE CHOICE (VENDOR / COMPANY) -->
+    <div id="profileChoiceScreen" class="screen hidden animate-in">
+        <div class="top-actions">
+            <button class="icon-btn" id="themeToggleChoice"><i class="fas fa-moon"></i> Dark</button>
+        </div>
+        <div class="text-center">
+            <div class="logo"><i class="fas fa-store"></i> Bazar Vendor</div>
+            <h2>How would you like to use Bazar?</h2>
+            <p class="role-subtitle">Choose your role to get started</p>
+        </div>
+        <div class="profile-choice">
+            <div class="choice-card" data-profile="vendor">
+                <div class="choice-icon">🛠️</div>
+                <h3>Vendor</h3>
+                <p class="choice-caption">Manage & sell your products</p>
+            </div>
+            <div class="choice-card" data-profile="company">
+                <div class="choice-icon">🏢</div>
+                <h3>Company</h3>
+                <p class="choice-caption">Source & procure supplies</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- VENDOR DASHBOARD -->
+    <div id="vendorDashboard" class="screen hidden animate-in screen-vendor">
+        <div class="navbar">
+            <div class="logo navbar-logo"><i class="fas fa-store"></i> Bazar Vendor</div>
+            <div class="nav-actions">
+                <button class="icon-btn" id="vendorNotificationsBtn"><i class="fas fa-bell"></i> <span id="vendorNotificationBadge" class="badge hidden">0</span></button>
+                <button class="icon-btn" id="themeToggleVendor"><i class="fas fa-moon"></i> Dark</button>
+                <button class="logout-btn" id="vendorLogoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </div>
+        <h2>Vendor Dashboard</h2>
+        <div class="tabs">
+            <div class="tab active" data-vendor-tab="profile">Profile</div>
+            <div class="tab" data-vendor-tab="items">My Items</div>
+            <div class="tab" data-vendor-tab="add">Add Item</div>
+        </div>
+
+        <!-- Profile tab -->
+        <div id="vendorProfileTab" class="tab-content">
+            <div class="profile-card">
+                <div class="form-row">
+                    <label>Store Name</label>
+                    <input type="text" id="vendorStoreName" class="input-field" value="Woodcraft Solutions">
+                </div>
+                <div class="form-row">
+                    <label>Owner Name</label>
+                    <input type="text" id="vendorOwnerName" class="input-field" value="Aryan Saini">
+                </div>
+                <div class="form-row">
+                    <label>Location</label>
+                    <input type="text" id="vendorLocation" class="input-field" value="Sector 62, Noida">
+                </div>
+                <div class="form-row">
+                    <label>Contact</label>
+                    <input type="tel" id="vendorContact" class="input-field" value="+91 98765 43210">
+                </div>
+                <button class="small-btn" id="saveVendorProfileBtn">Save Profile</button>
+            </div>
+        </div>
+
+        <!-- My Items tab -->
+        <div id="vendorItemsTab" class="tab-content hidden">
+            <div id="vendorItemList"></div>
+        </div>
+
+        <!-- Add Item tab -->
+        <div id="vendorAddTab" class="tab-content hidden">
+            <h3>Add new item</h3>
+            <input type="text" id="newItemName" class="input-field" placeholder="Item name (e.g. Plywood)">
+            <select id="newItemCategory" class="input-field">
+                <option value="Woods">Woods</option>
+                <option value="Paint">Paint</option>
+                <option value="Tools">Tools</option>
+                <option value="Hardware">Hardware</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Plumbing">Plumbing</option>
+            </select>
+            <input type="number" id="newItemPrice" class="input-field" placeholder="Price (₹)" min="0" step="1">
+            <input type="number" id="newItemQty" class="input-field" placeholder="Quantity" min="0" step="1">
+            <input type="text" id="newItemPlace" class="input-field" placeholder="Place / Location">
+            <button class="btn" id="addVendorItemBtn">Add Item</button>
+        </div>
+    </div>
+
+    <!-- COMPANY DASHBOARD -->
+    <div id="companyDashboard" class="screen hidden animate-in screen-company">
+        <div class="navbar">
+            <div class="logo navbar-logo"><i class="fas fa-store"></i> Bazar Vendor</div>
+            <div class="nav-actions">
+                <button class="icon-btn" id="companyCartBtn"><i class="fas fa-shopping-cart"></i> <span id="cartBadge" class="badge hidden">0</span></button>
+                <button class="icon-btn" id="companyNotificationsBtn"><i class="fas fa-bell"></i> <span id="companyNotificationBadge" class="badge hidden">0</span></button>
+                <button class="icon-btn" id="themeToggleCompany"><i class="fas fa-moon"></i> Dark</button>
+                <button class="logout-btn" id="companyLogoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </div>
+        <h2>Company Dashboard</h2>
+
+        <input type="text" id="companySearch" class="input-field" placeholder="Search items...">
+
+        <div class="category-section">
+            <div class="category-chips" id="companyCategoryChips">
+                <!-- chips generated dynamically -->
+            </div>
+        </div>
+
+        <div id="companyItemGrid" class="item-grid"></div>
+    </div>
+
+    <!-- NEGOTIATE MODAL -->
+    <div id="negotiateModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close" id="closeNegotiateModalBtn">&times;</span>
+            <h3>Negotiate</h3>
+            <p id="negotiateItemName" class="modal-subtext"></p>
+            <p>Current price: ₹<span id="negotiateCurrentPrice"></span></p>
+            <input type="number" id="negotiateOffer" class="input-field" placeholder="Your offer (₹)" min="0">
+            <button class="btn" id="sendNegotiationBtn">Send Offer</button>
+        </div>
+    </div>
+
+    <!-- EDIT ITEM MODAL (for vendor) -->
+    <div id="editItemModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close" id="closeEditItemModalBtn">&times;</span>
+            <h3>Edit Item</h3>
+            <input type="hidden" id="editItemId">
+            <div>
+                <label>Name</label>
+                <input type="text" id="editItemName" class="input-field">
+            </div>
+            <div>
+                <label>Category</label>
+                <select id="editItemCategory" class="input-field">
+                    <option value="Woods">Woods</option>
+                    <option value="Paint">Paint</option>
+                    <option value="Tools">Tools</option>
+                    <option value="Hardware">Hardware</option>
+                    <option value="Electrical">Electrical</option>
+                    <option value="Plumbing">Plumbing</option>
+                </select>
+            </div>
+            <div>
+                <label>Price (₹)</label>
+                <input type="number" id="editItemPrice" class="input-field" min="0">
+            </div>
+            <div>
+                <label>Quantity</label>
+                <input type="number" id="editItemQty" class="input-field" min="0">
+            </div>
+            <div>
+                <label>Place</label>
+                <input type="text" id="editItemPlace" class="input-field">
+            </div>
+            <button class="btn" id="saveItemEditBtn">Save Changes</button>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION MODAL (vendor) -->
+    <div id="vendorNotificationModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close" id="closeVendorNotificationModal">&times;</span>
+            <h3>Notifications</h3>
+            <div id="vendorNotificationList" class="notification-panel"></div>
+            <button class="small-btn" id="clearVendorNotifications">Clear all</button>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION MODAL (company) -->
+    <div id="companyNotificationModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close" id="closeCompanyNotificationModal">&times;</span>
+            <h3>Notifications</h3>
+            <div id="companyNotificationList" class="notification-panel"></div>
+            <button class="small-btn" id="clearCompanyNotifications">Clear all</button>
+        </div>
+    </div>
+
+    <!-- CART MODAL (company) -->
+    <div id="cartModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close" id="closeCartModal">&times;</span>
+            <h3>Your Cart</h3>
+            <div id="cartItemsList" class="notification-panel"></div>
+            <div class="spacer-top-16">
+                <button class="btn" id="buyNowBtn">Buy Now</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
