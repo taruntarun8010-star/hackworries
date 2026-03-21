@@ -362,16 +362,17 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
 });
 
-function startServer(port, hasRetried = false) {
+function startServer(startPort, attempt = 0, maxAttempts = 20) {
+    const port = startPort + attempt;
     const server = app.listen(port, () => {
         console.log(`Server running at http://localhost:${port}`);
     });
 
     server.on('error', (error) => {
-        if (error.code === 'EADDRINUSE' && !hasRetried) {
-            const fallbackPort = port + 1;
-            console.warn(`Port ${port} is busy. Retrying on port ${fallbackPort}...`);
-            startServer(fallbackPort, true);
+        if (error.code === 'EADDRINUSE' && attempt < maxAttempts) {
+            const nextPort = port + 1;
+            console.warn(`Port ${port} is busy. Retrying on port ${nextPort}...`);
+            startServer(startPort, attempt + 1, maxAttempts);
             return;
         }
         console.error('Server failed to start:', error);
